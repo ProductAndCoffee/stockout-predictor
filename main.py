@@ -19,6 +19,7 @@ class PredictionResponse(BaseModel):
     closing_stock: int
     sales_rate_per_day: float
     days_to_stockout: float
+    lead_time_days: int
 
 @app.get("/predict/{item_id}", response_model=PredictionResponse)
 def predict_stockout(item_id: str):
@@ -30,6 +31,10 @@ def predict_stockout(item_id: str):
     inventory = inv_resp.data[0]
     closing_stock = inventory["closing_stock"]
 
+    # Fetch supplier lead time
+    supplier_resp = supabase.table("suppliers").select("lead_time_days").eq("item_id", item_id).execute()
+    lead_time_days = supplier_resp.data[0]["lead_time_days"] if supplier_resp.data else 0
+
     # Fetch sales last 30 days
     start_date = (datetime.now() - timedelta(days=30)).date().isoformat()
     sales_resp = supabase.table("sales").select("quantity, sale_date").eq("item_id", item_id).gte("sale_date", start_date).execute()
@@ -40,7 +45,8 @@ def predict_stockout(item_id: str):
             "item_id": item_id,
             "closing_stock": closing_stock,
             "sales_rate_per_day": 0.0,
-            "days_to_stockout": 9999
+            "days_to_stockout": 9999,
+            "lead_time_days": lead_time_days
         }
 
     # Convert to DataFrame
@@ -54,5 +60,6 @@ def predict_stockout(item_id: str):
         "item_id": item_id,
         "closing_stock": closing_stock,
         "sales_rate_per_day": round(sales_rate, 2),
-        "days_to_stockout": round(days_to_stockout, 1)
+        "days_to_stockout": round(days_to_stockout, 1),
+        "lead_time_days": lead_time_days
     }
